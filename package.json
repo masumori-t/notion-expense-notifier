@@ -1,0 +1,19 @@
+{
+  "name": "notion-expense-notifier",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Notionの小口精算フォーム回答データベースを定期チェックし、清算完了になっていないデータを回答者ごとに集計して、前回チェック以降に新規データがあった場合のみNotionの「小口清算をする」タスクを作成・アサインするツール",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/notify.js",
+    "dry-run": "node src/notify.js --dry-run",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "@notionhq/client": "5.23.2",
+    "dotenv": "^17.2.3"
+  }
+}

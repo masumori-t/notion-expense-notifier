@@ -1,0 +1,68 @@
+name: 小口精算 未清算チェック
+
+# 毎日 9:25 と 15:15 (Asia/Tokyo) に自動実行する。
+# cron はUTC基準のため、JST-9時間した 00:25 UTC / 06:15 UTC を指定している。
+# 手動実行(workflow_dispatch)も可能(Actionsタブから "Run workflow" で実行できる)。
+on:
+  schedule:
+    - cron: "25 0 * * *" # 09:25 JST
+    - cron: "15 6 * * *" # 15:15 JST
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true にすると、Notionへの書き込み(タスク作成・状態ファイル更新)を行わずログ確認のみ行う"
+        type: boolean
+        default: false
+
+# 前回の実行が終わる前に次の実行が始まって状態ファイルの更新が競合しないよう、
+# 同時実行を1つに制限する(キャンセルはせず、順番に実行させる)。
+concurrency:
+  group: notion-expense-notify
+  cancel-in-progress: false
+
+permissions:
+  contents: write # 状態ファイル(state/last-checked.json)をコミットするために必要
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true # 後段の git push で GITHUB_TOKEN を使うため
+
+      - name: Node.jsをセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: 依存パッケージをインストール
+        run: npm ci
+
+      - name: Notionをチェックし、必要ならタスクを作成
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_TASK_DATA_SOURCE_ID: ${{ secrets.NOTION_TASK_DATA_SOURCE_ID }}
+          NOTION_ASSIGNEE_USER_ID: ${{ secrets.NOTION_ASSIGNEE_USER_ID }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: node src/notify.js
+
+      - name: 状態ファイルの更新をコミット
+        # dry-run実行時や、新規データが無くタスクを作成しなかった場合は
+        # state/last-checked.json を書き換えていないため、通常「変更なし」でスキップされる。
+        # (初回実行でファイルが新規作成される場合もあるため、`git diff`ではなく
+        #  未追跡ファイルも検知できる `git status --porcelain` で変更有無を判定する)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -z "$(git status --porcelain -- state/last-checked.json)" ]; then
+            echo "状態ファイルに変更なし。コミットをスキップします。"
+          else
+            git add state/last-checked.json
+            git commit -m "chore: 前回チェック時刻を更新 [skip ci]"
+            git push
+          fi
