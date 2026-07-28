@@ -5,6 +5,8 @@ import {
   extractExpense,
   groupByPayee,
   filterNewExpenses,
+  findExpensesToNotify,
+  buildNotifiedPageIds,
   buildTaskBlocks,
   formatYen,
   sumValidAmount,
@@ -138,6 +140,38 @@ test("filterNewExpenses: createdAtが無いデータは安全側に倒して新�
   const expenses = [{ pageId: "unknown", createdAt: null }];
   const result = filterNewExpenses(expenses, "2026-06-01T00:00:00.000Z");
   assert.equal(result.length, 1);
+});
+
+test("findExpensesToNotify: notifiedPageIdsがある場合は未通知のpageIdだけを返す", () => {
+  const expenses = [
+    { pageId: "old", createdAt: "2026-01-01T00:00:00.000Z" },
+    { pageId: "new", createdAt: "2026-07-28T00:00:00.000Z" },
+  ];
+  const result = findExpensesToNotify(expenses, {
+    lastCheckedAt: "2026-07-01T00:00:00.000Z",
+    notifiedPageIds: ["old"],
+  });
+  assert.deepEqual(result.map((e) => e.pageId), ["new"]);
+});
+
+test("findExpensesToNotify: notifiedPageIdsが空なら時刻ベースにフォールバックする", () => {
+  const expenses = [
+    { pageId: "old", createdAt: "2026-01-01T00:00:00.000Z" },
+    { pageId: "new", createdAt: "2026-07-28T00:00:00.000Z" },
+  ];
+  const result = findExpensesToNotify(expenses, {
+    lastCheckedAt: "2026-07-01T00:00:00.000Z",
+    notifiedPageIds: [],
+  });
+  assert.deepEqual(result.map((e) => e.pageId), ["new"]);
+});
+
+test("buildNotifiedPageIds: 現在の未清算IDを通知済みとして残す", () => {
+  const result = buildNotifiedPageIds(
+    [{ pageId: "a" }, { pageId: "b" }],
+    ["a", "settled-already"]
+  );
+  assert.deepEqual(result.sort(), ["a", "b"]);
 });
 
 test("sumValidAmount: amountInvalidな行を除外して合計する", () => {

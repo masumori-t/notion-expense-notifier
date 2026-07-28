@@ -17,7 +17,8 @@ import { buildFilter, queryAllPages, createExpenseTask, describeNotionError } fr
 import {
   extractExpense,
   groupByPayee,
-  filterNewExpenses,
+  findExpensesToNotify,
+  buildNotifiedPageIds,
   buildTaskBlocks,
   formatYen,
   sumValidAmount,
@@ -102,17 +103,19 @@ async function main() {
   const expenses = pages.map((page) => extractExpense(page, PROP_NAMES));
 
   const state = await loadState(STATE_FILE_PATH);
-  const isFirstRun = state.lastCheckedAt === null;
-  const newExpenses = filterNewExpenses(expenses, state.lastCheckedAt);
+  // pageIdベースで「まだ通知していない未清算」を判定する。
+  // (定期実行が遅れても、未通知の行が残っていれば次回実行で拾える)
+  const newExpenses = findExpensesToNotify(expenses, state);
 
   console.log(
     `[notify] 前回チェック時刻: ${state.lastCheckedAt ?? "(未実行/初回)"} / ` +
-      `新規データ: ${newExpenses.length}件`
+      `通知済みID: ${state.notifiedPageIds?.length ?? 0}件 / ` +
+      `未通知データ: ${newExpenses.length}件`
   );
 
   if (newExpenses.length === 0) {
     console.log(
-      "[notify] 前回チェック以降に新規追加された未清算データはありません。タスクは作成しません。"
+      "[notify] 未通知の未清算データはありません。タスクは作成しません。"
     );
     if (isDryRun) {
       console.log("\n----- (dry-runのため実際には何も行っていません) -----\n");
@@ -120,8 +123,8 @@ async function main() {
     return;
   }
 
-  // タスク本文には、新規データだけでなく現在未清算の全データを見せる(全体像がわかるように)。
-  // 新規データには 🆕 マークを付けて区別する。
+  // タスク本文には、未通知分だけでなく現在未清算の全データを見せる(全体像がわかるように)。
+  // 未通知データには 🆕 マークを付けて区別する。
   const groups = groupByPayee(expenses);
   const newPageIds = new Set(newExpenses.map((e) => e.pageId));
   const children = buildTaskBlocks(groups, { newPageIds });
@@ -132,7 +135,7 @@ async function main() {
     console.log(
       `\n----- dry-run: 作成される予定のタスク -----\n` +
         `タイトル: ${TASK_CONFIG.title}\n` +
-        `新規データ: ${newExpenses.length}件 / 未清算合計: ${formatYen(grandTotal)}\n` +
+        `未通知データ: ${newExpenses.length}件 / 未清算合計: ${formatYen(grandTotal)}\n` +
         `本文ブロック数: ${children.length}\n` +
         `----- (dry-runのため実際にはタスクを作成していません。状態ファイルも更新していません) -----\n`
     );
@@ -150,11 +153,18 @@ async function main() {
   } catch (error) {
     console.error("[notify] Notionタスクの作成に失敗しました:", describeNotionError(error));
     process.exitCode = 1;
-    return; // 状態ファイルは更新しない(次回また同じ新規データとして再検知させる)
+    return; // 状態ファイルは更新しない(次回また同じ未通知データとして再検知させる)
   }
 
-  await saveState(STATE_FILE_PATH, { lastCheckedAt: new Date().toISOString() });
-  console.log(`[notify] 状態ファイル(${STATE_FILE_PATH})を更新しました。`);
+  const nextState = {
+    lastCheckedAt: new Date().toISOString(),
+    notifiedPageIds: buildNotifiedPageIds(expenses, state.notifiedPageIds),
+  };
+  await saveState(STATE_FILE_PATH, nextState);
+  console.log(
+    `[notify] 状態ファイル(${STATE_FILE_PATH})を更新しました。` +
+      `(通知済みID: ${nextState.notifiedPageIds.length}件)`
+  );
 }
 
 main().catch((error) => {

@@ -1,12 +1,16 @@
 name: 小口精算 未清算チェック
 
-# 毎日 9:25 と 15:15 (Asia/Tokyo) に自動実行する。
-# cron はUTC基準のため、JST-9時間した 00:25 UTC / 06:15 UTC を指定している。
+# 毎日 9:25 と 15:15 (Asia/Tokyo) に加え、業務時間帯は30分ごとに実行する。
+# GitHub Actions の schedule は数分〜数十分遅延することがあるため、
+# 取りこぼし防止として頻度を上げている。
+# cron はUTC基準(JST = UTC+9)。
 # 手動実行(workflow_dispatch)も可能(Actionsタブから "Run workflow" で実行できる)。
 on:
   schedule:
-    - cron: "25 0 * * *" # 09:25 JST
-    - cron: "15 6 * * *" # 15:15 JST
+    - cron: "25 0 * * *" # 09:25 JST (指定時刻)
+    - cron: "15 6 * * *" # 15:15 JST (指定時刻)
+    # 09:00-18:30 JST (= 00:00-09:30 UTC) は30分ごと
+    - cron: "0,30 0-9 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -48,14 +52,13 @@ jobs:
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NOTION_TASK_DATA_SOURCE_ID: ${{ secrets.NOTION_TASK_DATA_SOURCE_ID }}
           NOTION_ASSIGNEE_USER_ID: ${{ secrets.NOTION_ASSIGNEE_USER_ID }}
-          DRY_RUN: ${{ inputs.dry_run }}
+          # schedule実行時は inputs が空になるため、明示的に false にする
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
         run: node src/notify.js
 
       - name: 状態ファイルの更新をコミット
-        # dry-run実行時や、新規データが無くタスクを作成しなかった場合は
+        # dry-run実行時や、未通知データが無くタスクを作成しなかった場合は
         # state/last-checked.json を書き換えていないため、通常「変更なし」でスキップされる。
-        # (初回実行でファイルが新規作成される場合もあるため、`git diff`ではなく
-        #  未追跡ファイルも検知できる `git status --porcelain` で変更有無を判定する)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

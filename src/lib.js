@@ -156,6 +156,33 @@ export function filterNewExpenses(expenses, lastCheckedAt) {
   });
 }
 
+/**
+ * まだタスク通知していない未清算データだけを抜き出す。
+ * notifiedPageIds が空(=旧state形式からの移行直後など)の場合は、時刻ベース(filterNewExpenses)にフォールバックする。
+ * @param {Array<{pageId:string, createdAt:string|null}>} expenses
+ * @param {{ lastCheckedAt?: string|null, notifiedPageIds?: string[] }} state
+ */
+export function findExpensesToNotify(expenses, state = {}) {
+  const notifiedPageIds = state.notifiedPageIds ?? [];
+  if (notifiedPageIds.length > 0) {
+    const notified = new Set(notifiedPageIds);
+    return expenses.filter((expense) => !notified.has(expense.pageId));
+  }
+  return filterNewExpenses(expenses, state.lastCheckedAt ?? null);
+}
+
+/**
+ * タスク作成後に保存する「通知済みpageId」一覧を作る。
+ * 現在の未清算IDをすべて通知済みとし、すでに清算済みになった古いIDは捨てる(肥大化防止)。
+ * @param {Array<{pageId:string}>} expenses - 現在の未清算一覧
+ * @param {string[]} [previousNotifiedPageIds]
+ */
+export function buildNotifiedPageIds(expenses, previousNotifiedPageIds = []) {
+  const currentIds = expenses.map((expense) => expense.pageId).filter(Boolean);
+  // 現在未清算のものだけ残せば十分(清算済みIDを持ち続ける必要はない)
+  return Array.from(new Set([...previousNotifiedPageIds.filter((id) => currentIds.includes(id)), ...currentIds]));
+}
+
 // Intl.NumberFormatの style:"currency" は実行環境のICUデータによって
 // 全角の「￥」(U+FFE5)を返す場合があるため、桁区切りのみ利用して
 // 半角の「¥」(U+00A5)を明示的に付ける(report.html等の表記と一致させる)。
