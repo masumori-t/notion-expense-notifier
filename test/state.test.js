@@ -9,7 +9,7 @@ test("loadState: ファイルが存在しない場合は空の状態を返す(�
   const dir = await mkdtemp(join(tmpdir(), "notion-expense-notifier-test-"));
   try {
     const state = await loadState(join(dir, "does-not-exist.json"));
-    assert.deepEqual(state, { lastCheckedAt: null, notifiedPageIds: [] });
+    assert.deepEqual(state, { lastCheckedAt: null, notifiedPageIds: [], lastRunAt: null });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -22,11 +22,13 @@ test("saveState → loadState: 保存した内容をそのまま読み込める(
     await saveState(filePath, {
       lastCheckedAt: "2026-07-23T00:00:00.000Z",
       notifiedPageIds: ["page-1", "page-2"],
+      lastRunAt: "2026-07-23T01:00:00.000Z",
     });
     const state = await loadState(filePath);
     assert.deepEqual(state, {
       lastCheckedAt: "2026-07-23T00:00:00.000Z",
       notifiedPageIds: ["page-1", "page-2"],
+      lastRunAt: "2026-07-23T01:00:00.000Z",
     });
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -41,6 +43,7 @@ test("loadState: 旧形式(lastCheckedAtのみ)でも読み込める", async () 
     const state = await loadState(filePath);
     assert.equal(state.lastCheckedAt, "2026-07-24T04:49:03.756Z");
     assert.deepEqual(state.notifiedPageIds, []);
+    assert.equal(state.lastRunAt, null);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -52,7 +55,7 @@ test("loadState: JSONとして壊れている場合は空の状態にフォー�
     const filePath = join(dir, "broken.json");
     await writeFile(filePath, "{not valid json", "utf-8");
     const state = await loadState(filePath);
-    assert.deepEqual(state, { lastCheckedAt: null, notifiedPageIds: [] });
+    assert.deepEqual(state, { lastCheckedAt: null, notifiedPageIds: [], lastRunAt: null });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

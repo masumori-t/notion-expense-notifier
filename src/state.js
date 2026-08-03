@@ -11,14 +11,14 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
-const EMPTY_STATE = { lastCheckedAt: null, notifiedPageIds: [] };
+const EMPTY_STATE = { lastCheckedAt: null, notifiedPageIds: [], lastRunAt: null };
 
 /**
  * 状態ファイルを読み込む。
  * ファイルが存在しない(初回実行)場合やJSONとして壊れている場合は、
  * 安全側のデフォルト値を返す(=現在の未清算データを全て「未通知」扱いにする)。
  * @param {string} filePath
- * @returns {Promise<{ lastCheckedAt: string|null, notifiedPageIds: string[] }>}
+ * @returns {Promise<{ lastCheckedAt: string|null, notifiedPageIds: string[], lastRunAt: string|null }>}
  */
 export async function loadState(filePath) {
   try {
@@ -31,7 +31,11 @@ export async function loadState(filePath) {
     const notifiedPageIds = Array.isArray(parsed.notifiedPageIds)
       ? parsed.notifiedPageIds.filter((id) => typeof id === "string")
       : [];
-    return { lastCheckedAt, notifiedPageIds };
+    const lastRunAt =
+      typeof parsed.lastRunAt === "string" || parsed.lastRunAt === null || parsed.lastRunAt === undefined
+        ? parsed.lastRunAt ?? null
+        : null;
+    return { lastCheckedAt, notifiedPageIds, lastRunAt };
   } catch (error) {
     if (error?.code === "ENOENT") {
       return { ...EMPTY_STATE };
@@ -44,13 +48,14 @@ export async function loadState(filePath) {
 /**
  * 状態ファイルを書き込む(ディレクトリが無ければ作成する)。
  * @param {string} filePath
- * @param {{ lastCheckedAt: string|null, notifiedPageIds?: string[] }} state
+ * @param {{ lastCheckedAt: string|null, notifiedPageIds?: string[], lastRunAt?: string|null }} state
  */
 export async function saveState(filePath, state) {
   await mkdir(dirname(filePath), { recursive: true });
   const payload = {
     lastCheckedAt: state.lastCheckedAt ?? null,
     notifiedPageIds: Array.isArray(state.notifiedPageIds) ? state.notifiedPageIds : [],
+    lastRunAt: state.lastRunAt ?? null,
   };
   await writeFile(filePath, JSON.stringify(payload, null, 2) + "\n", "utf-8");
 }

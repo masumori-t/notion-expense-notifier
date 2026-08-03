@@ -8,7 +8,7 @@ Notionの「小口精算フォーム」回答データベースを定期的に�
 ```
 [Notion: 小口精算フォーム回答DB]
         │ ①「清算完了」が未チェックの行を取得
-        │   (GitHub Actions: 9:25/15:15 JST + 業務時間帯は30分ごと)
+        │   (GitHub Actions: 毎日 9:25 / 13:00 / 15:15 JST)
         ▼
 [notify.js] ─② 未通知のpageIdがあるか判定(state/last-checked.json)
         │
@@ -64,9 +64,18 @@ npm test                 # ユニットテスト(31件)
    - `NOTION_ASSIGNEE_USER_ID`
 3. Settings → Actions → General → Workflow permissions を **"Read and write permissions"** にする
    (状態ファイル `state/last-checked.json` をワークフローがコミットするため)。
-4. `.github/workflows/notify.yml` により、毎日 9:25 / 15:15 (JST) に加え、業務時間帯は30分ごとに自動実行される。
-   （GitHubの定期実行は遅延することがあるため、取りこぼし防止で頻度を上げています）
+4. `.github/workflows/notify.yml` により、毎日 **9:25 / 13:00 / 15:15 (JST)** に自動実行される。
    Actionsタブの「Run workflow」から手動実行(dry-runオプション付き)も可能。
+5. **重要(無料プラン + Privateリポジトリの場合)**  
+   GitHub無料アカウントの Private リポジトリでは、`schedule`(定期実行)が動かないことがあります。  
+   手動実行は成功するのに自動だけ来ない場合は、次のいずれかが必要です。
+   - リポジトリを **Public** にする（Settings → General → Danger Zone → Change repository visibility）  
+     ※ Secrets(トークン)は公開されません。コードだけが見える状態になります。
+   - または GitHub Pro にする
+   - または外部cronから `workflow_dispatch` を呼ぶ
+
+確認方法: Actions タブで、指定時刻付近に自動実行の履歴が増えているか見る。  
+`state/last-checked.json` の `lastRunAt` が更新されていれば、定期実行は生きています。
 
 ## 「未通知データ」の判定方法
 

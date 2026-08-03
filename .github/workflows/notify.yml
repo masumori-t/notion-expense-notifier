@@ -1,16 +1,16 @@
 name: 小口精算 未清算チェック
 
-# 毎日 9:25 と 15:15 (Asia/Tokyo) に加え、業務時間帯は30分ごとに実行する。
-# GitHub Actions の schedule は数分〜数十分遅延することがあるため、
-# 取りこぼし防止として頻度を上げている。
+# 毎日 9:25 / 13:00 / 15:15 (Asia/Tokyo) に自動実行する。
 # cron はUTC基準(JST = UTC+9)。
-# 手動実行(workflow_dispatch)も可能(Actionsタブから "Run workflow" で実行できる)。
+#
+# 重要: GitHub無料プランの Private リポジトリでは schedule が動かない/不安定なことがある。
+# その場合はリポジトリを Public にするか、外部cronから workflow_dispatch を呼ぶこと(README参照)。
+# 手動実行(workflow_dispatch)は Actions タブからいつでも可能。
 on:
   schedule:
-    - cron: "25 0 * * *" # 09:25 JST (指定時刻)
-    - cron: "15 6 * * *" # 15:15 JST (指定時刻)
-    # 09:00-18:30 JST (= 00:00-09:30 UTC) は30分ごと
-    - cron: "0,30 0-9 * * *"
+    - cron: "25 0 * * *" # 09:25 JST
+    - cron: "0 4 * * *" # 13:00 JST
+    - cron: "15 6 * * *" # 15:15 JST
   workflow_dispatch:
     inputs:
       dry_run:
@@ -26,6 +26,7 @@ concurrency:
 
 permissions:
   contents: write # 状態ファイル(state/last-checked.json)をコミットするために必要
+  actions: read
 
 jobs:
   notify:
@@ -35,7 +36,7 @@ jobs:
       - name: リポジトリをチェックアウト
         uses: actions/checkout@v4
         with:
-          persist-credentials: true # 後段の git push で GITHUB_TOKEN を使うため
+          persist-credentials: true
 
       - name: Node.jsをセットアップ
         uses: actions/setup-node@v4
@@ -52,13 +53,39 @@ jobs:
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NOTION_TASK_DATA_SOURCE_ID: ${{ secrets.NOTION_TASK_DATA_SOURCE_ID }}
           NOTION_ASSIGNEE_USER_ID: ${{ secrets.NOTION_ASSIGNEE_USER_ID }}
-          # schedule実行時は inputs が空になるため、明示的に false にする
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
-        run: node src/notify.js
+          # 診断用: schedule / workflow_dispatch のどちらで起動したかログに出す
+          TRIGGER_EVENT: ${{ github.event_name }}
+        run: |
+          echo "[notify] trigger=${TRIGGER_EVENT}"
+          node src/notify.js
+
+      - name: 最終実行時刻を必ず記録する
+        # タスクを作らなかった日でも「定期実行が動いたか」を残す。
+        # Private無料枠で schedule が死んでいる場合、このコミットが増えないことで気づける。
+        if: success()
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "dry-runのため状態ファイルは更新しません。"
+            exit 0
+          fi
+          node <<'EOF'
+          const fs = require("fs");
+          const path = "state/last-checked.json";
+          let state = { lastCheckedAt: null, notifiedPageIds: [], lastRunAt: null };
+          try {
+            state = { ...state, ...JSON.parse(fs.readFileSync(path, "utf8")) };
+          } catch (_) {}
+          state.lastRunAt = new Date().toISOString();
+          fs.mkdirSync("state", { recursive: true });
+          fs.writeFileSync(path, JSON.stringify(state, null, 2) + "\n");
+          console.log("[notify] lastRunAt を更新:", state.lastRunAt);
+          EOF
 
       - name: 状態ファイルの更新をコミット
-        # dry-run実行時や、未通知データが無くタスクを作成しなかった場合は
-        # state/last-checked.json を書き換えていないため、通常「変更なし」でスキップされる。
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -66,6 +93,6 @@ jobs:
             echo "状態ファイルに変更なし。コミットをスキップします。"
           else
             git add state/last-checked.json
-            git commit -m "chore: 前回チェック時刻を更新 [skip ci]"
+            git commit -m "chore: 実行状態を更新 [skip ci]"
             git push
           fi

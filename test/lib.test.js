@@ -7,6 +7,7 @@ import {
   filterNewExpenses,
   findExpensesToNotify,
   buildNotifiedPageIds,
+  normalizePageId,
   buildTaskBlocks,
   formatYen,
   sumValidAmount,
@@ -142,6 +143,13 @@ test("filterNewExpenses: createdAtが無いデータは安全側に倒して新�
   assert.equal(result.length, 1);
 });
 
+test("normalizePageId: ハイフン有無を吸収する", () => {
+  assert.equal(
+    normalizePageId("3b158b78-af8d-8103-a25e-fc123eb9d1b4"),
+    normalizePageId("3b158b78af8d8103a25efc123eb9d1b4")
+  );
+});
+
 test("findExpensesToNotify: notifiedPageIdsがある場合は未通知のpageIdだけを返す", () => {
   const expenses = [
     { pageId: "old", createdAt: "2026-01-01T00:00:00.000Z" },
@@ -152,6 +160,16 @@ test("findExpensesToNotify: notifiedPageIdsがある場合は未通知のpageId�
     notifiedPageIds: ["old"],
   });
   assert.deepEqual(result.map((e) => e.pageId), ["new"]);
+});
+
+test("findExpensesToNotify: ハイフン有無が違っても通知済みと判定できる", () => {
+  const expenses = [
+    { pageId: "3b158b78-af8d-8103-a25e-fc123eb9d1b4", createdAt: "2026-08-03T00:00:00.000Z" },
+  ];
+  const result = findExpensesToNotify(expenses, {
+    notifiedPageIds: ["3b158b78af8d8103a25efc123eb9d1b4"],
+  });
+  assert.equal(result.length, 0);
 });
 
 test("findExpensesToNotify: notifiedPageIdsが空なら時刻ベースにフォールバックする", () => {

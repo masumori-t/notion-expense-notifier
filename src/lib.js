@@ -157,6 +157,15 @@ export function filterNewExpenses(expenses, lastCheckedAt) {
 }
 
 /**
+ * NotionのページIDを比較用に正規化する(ハイフン有無の差を吸収する)。
+ * @param {string} pageId
+ */
+export function normalizePageId(pageId) {
+  if (!pageId || typeof pageId !== "string") return "";
+  return pageId.replace(/-/g, "").toLowerCase();
+}
+
+/**
  * まだタスク通知していない未清算データだけを抜き出す。
  * notifiedPageIds が空(=旧state形式からの移行直後など)の場合は、時刻ベース(filterNewExpenses)にフォールバックする。
  * @param {Array<{pageId:string, createdAt:string|null}>} expenses
@@ -165,8 +174,8 @@ export function filterNewExpenses(expenses, lastCheckedAt) {
 export function findExpensesToNotify(expenses, state = {}) {
   const notifiedPageIds = state.notifiedPageIds ?? [];
   if (notifiedPageIds.length > 0) {
-    const notified = new Set(notifiedPageIds);
-    return expenses.filter((expense) => !notified.has(expense.pageId));
+    const notified = new Set(notifiedPageIds.map(normalizePageId).filter(Boolean));
+    return expenses.filter((expense) => !notified.has(normalizePageId(expense.pageId)));
   }
   return filterNewExpenses(expenses, state.lastCheckedAt ?? null);
 }
@@ -179,8 +188,20 @@ export function findExpensesToNotify(expenses, state = {}) {
  */
 export function buildNotifiedPageIds(expenses, previousNotifiedPageIds = []) {
   const currentIds = expenses.map((expense) => expense.pageId).filter(Boolean);
+  const currentNormalized = new Set(currentIds.map(normalizePageId));
   // 現在未清算のものだけ残せば十分(清算済みIDを持ち続ける必要はない)
-  return Array.from(new Set([...previousNotifiedPageIds.filter((id) => currentIds.includes(id)), ...currentIds]));
+  // 保存形式は Notion API が返すハイフン付きIDを優先する
+  const byNormalized = new Map();
+  for (const id of currentIds) {
+    byNormalized.set(normalizePageId(id), id);
+  }
+  for (const id of previousNotifiedPageIds ?? []) {
+    const key = normalizePageId(id);
+    if (currentNormalized.has(key) && !byNormalized.has(key)) {
+      byNormalized.set(key, id);
+    }
+  }
+  return Array.from(byNormalized.values());
 }
 
 // Intl.NumberFormatの style:"currency" は実行環境のICUデータによって

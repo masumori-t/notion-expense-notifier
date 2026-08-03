@@ -120,6 +120,14 @@ async function main() {
     if (isDryRun) {
       console.log("\n----- (dry-runのため実際には何も行っていません) -----\n");
     }
+    // 実行自体は成功しているので、最終実行時刻だけは残す(定期実行の死活監視用)
+    if (!isDryRun) {
+      await saveState(STATE_FILE_PATH, {
+        ...state,
+        lastRunAt: new Date().toISOString(),
+      });
+      console.log(`[notify] 状態ファイル(${STATE_FILE_PATH})の lastRunAt を更新しました。`);
+    }
     return;
   }
 
@@ -156,8 +164,10 @@ async function main() {
     return; // 状態ファイルは更新しない(次回また同じ未通知データとして再検知させる)
   }
 
+  const nowIso = new Date().toISOString();
   const nextState = {
-    lastCheckedAt: new Date().toISOString(),
+    lastCheckedAt: nowIso,
+    lastRunAt: nowIso,
     notifiedPageIds: buildNotifiedPageIds(expenses, state.notifiedPageIds),
   };
   await saveState(STATE_FILE_PATH, nextState);
