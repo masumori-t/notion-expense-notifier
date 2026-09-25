@@ -12,10 +12,10 @@
 
 /**
  * 「未清算」を表す filter を組み立てる。
- * 「清算完了」プロパティの実際の型(checkbox / status / select)に応じて
+ * 「総務清算完了」プロパティの実際の型(checkbox / status / select)に応じて
  * SETTLED_PROPERTY_TYPE 環境変数で切り替えられるようにしている。
  * (実データベースには「上司の承認」に相当する承認用チェックボックスは実質存在しないため、
- *  清算完了のみで判定する仕様に簡略化している)
+ *  総務清算完了のみで判定する仕様に簡略化している)
  */
 export function buildFilter({ settledProperty, settledPropertyType = "checkbox", settledValue }) {
   return buildBooleanLikeCondition({
@@ -210,7 +210,7 @@ export function describeNotionError(error) {
   if (code === "validation_error") {
     return (
       "Notionへのリクエストが不正です(validation_error)。" +
-      "プロパティ名や「清算完了」プロパティの型(SETTLED_PROPERTY_TYPE)、" +
+      "プロパティ名や「総務清算完了」プロパティの型(SETTLED_PROPERTY_TYPE)、" +
       "タスクDB側のプロパティ名(TASK_*_PROPERTY)が実際のDB定義と一致しているか確認してください。"
     );
   }

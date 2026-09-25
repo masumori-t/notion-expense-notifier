@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Notionの小口精算フォーム回答データベースを定期チェックし、
-// 「清算完了」が未チェックのデータを回答者ごとに集計して、
+// 「総務清算完了」が未チェックのデータを回答者ごとに集計して、
 // 前回チェック時から新規データが増えていた場合のみ、Notionの「KT_タスク」DBに
 // 「小口清算をする」タスクを作成して担当者にアサインするメインスクリプト。
 //
@@ -33,7 +33,7 @@ const PROP_NAMES = {
   summary: process.env.PROP_SUMMARY ?? "摘要",
   date: process.env.PROP_DATE ?? "日付",
   category: process.env.PROP_CATEGORY ?? "科目",
-  settled: process.env.PROP_SETTLED ?? "清算完了",
+  settled: process.env.PROP_SETTLED ?? "総務清算完了",
 };
 
 const SETTLED_PROPERTY_TYPE = process.env.SETTLED_PROPERTY_TYPE ?? "checkbox";

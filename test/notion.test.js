@@ -69,7 +69,7 @@ test("queryAllPages: dataSources.queryを使い、ページネーションも正
     ],
   });
 
-  const pages = await queryAllPages(client, databaseId, { property: "清算完了", checkbox: { equals: false } });
+  const pages = await queryAllPages(client, databaseId, { property: "総務清算完了", checkbox: { equals: false } });
 
   assert.deepEqual(pages.map((p) => p.id), ["p1", "p2"]);
   assert.equal(calls.retrieve, 1, "databases.retrieveは1回だけ呼ばれる(キャッシュされる)");
@@ -77,23 +77,23 @@ test("queryAllPages: dataSources.queryを使い、ページネーションも正
   assert.equal(calls.query[0].data_source_id, "ds_999");
 });
 
-test("buildFilter: 清算完了(checkbox)のfilterを返す", () => {
-  const filter = buildFilter({ settledProperty: "清算完了" });
-  assert.deepEqual(filter, { property: "清算完了", checkbox: { equals: false } });
+test("buildFilter: 総務清算完了(checkbox)のfilterを返す", () => {
+  const filter = buildFilter({ settledProperty: "総務清算完了" });
+  assert.deepEqual(filter, { property: "総務清算完了", checkbox: { equals: false } });
 });
 
 test("buildFilter: settledPropertyTypeがstatus型の場合も正しいfilterになる", () => {
   const filter = buildFilter({
-    settledProperty: "清算完了",
+    settledProperty: "総務清算完了",
     settledPropertyType: "status",
     settledValue: "完了",
   });
-  assert.deepEqual(filter, { property: "清算完了", status: { does_not_equal: "完了" } });
+  assert.deepEqual(filter, { property: "総務清算完了", status: { does_not_equal: "完了" } });
 });
 
 test("buildFilter: 未対応のプロパティ型ではエラーを投げる", () => {
   assert.throws(
-    () => buildFilter({ settledProperty: "清算完了", settledPropertyType: "multi_select" }),
+    () => buildFilter({ settledProperty: "総務清算完了", settledPropertyType: "multi_select" }),
     /未対応のプロパティ型/
   );
 });
